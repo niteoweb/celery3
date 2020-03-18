@@ -10,7 +10,7 @@ from __future__ import absolute_import
 
 import logging
 
-from kombu.async.timer import to_timestamp
+from kombu.asynchronous.timer import to_timestamp
 from kombu.utils.encoding import safe_repr
 
 from celery.utils.log import get_logger
@@ -19,14 +19,20 @@ from celery.utils.timeutils import timezone
 from .job import Request
 from .state import task_reserved
 
-__all__ = ['default']
+__all__ = ["default"]
 
 logger = get_logger(__name__)
 
 
-def default(task, app, consumer,
-            info=logger.info, error=logger.error, task_reserved=task_reserved,
-            to_system_tz=timezone.to_system):
+def default(
+    task,
+    app,
+    consumer,
+    info=logger.info,
+    error=logger.error,
+    task_reserved=task_reserved,
+    to_system_tz=timezone.to_system,
+):
     hostname = consumer.hostname
     eventer = consumer.event_dispatcher
     Req = Request
@@ -41,25 +47,34 @@ def default(task, app, consumer,
     handle = consumer.on_task_request
     limit_task = consumer._limit_task
 
-    def task_message_handler(message, body, ack, reject, callbacks,
-                             to_timestamp=to_timestamp):
-        req = Req(body, on_ack=ack, on_reject=reject,
-                  app=app, hostname=hostname,
-                  eventer=eventer, task=task,
-                  connection_errors=connection_errors,
-                  message=message)
+    def task_message_handler(
+        message, body, ack, reject, callbacks, to_timestamp=to_timestamp
+    ):
+        req = Req(
+            body,
+            on_ack=ack,
+            on_reject=reject,
+            app=app,
+            hostname=hostname,
+            eventer=eventer,
+            task=task,
+            connection_errors=connection_errors,
+            message=message,
+        )
         if req.revoked():
             return
 
         if _does_info:
-            info('Received task: %s', req)
+            info("Received task: %s", req)
 
         if events:
             send_event(
-                'task-received',
-                uuid=req.id, name=req.name,
-                args=safe_repr(req.args), kwargs=safe_repr(req.kwargs),
-                retries=req.request_dict.get('retries', 0),
+                "task-received",
+                uuid=req.id,
+                name=req.name,
+                args=safe_repr(req.args),
+                kwargs=safe_repr(req.kwargs),
+                retries=req.request_dict.get("retries", 0),
                 eta=req.eta and req.eta.isoformat(),
                 expires=req.expires and req.expires.isoformat(),
             )
@@ -71,12 +86,17 @@ def default(task, app, consumer,
                 else:
                     eta = to_timestamp(req.eta, timezone.local)
             except OverflowError as exc:
-                error("Couldn't convert eta %s to timestamp: %r. Task: %r",
-                      req.eta, exc, req.info(safe=True), exc_info=True)
+                error(
+                    "Couldn't convert eta %s to timestamp: %r. Task: %r",
+                    req.eta,
+                    exc,
+                    req.info(safe=True),
+                    exc_info=True,
+                )
                 req.acknowledge()
             else:
                 consumer.qos.increment_eventually()
-                call_at(eta, apply_eta_task, (req, ), priority=6)
+                call_at(eta, apply_eta_task, (req,), priority=6)
         else:
             if rate_limits_enabled:
                 bucket = get_bucket(task.name)

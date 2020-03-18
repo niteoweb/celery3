@@ -18,7 +18,7 @@ import threading
 
 from time import sleep
 
-from kombu.async.semaphore import DummyLock
+from kombu.asynchronous.semaphore import DummyLock
 
 from celery import bootsteps
 from celery.five import monotonic
@@ -28,18 +28,18 @@ from celery.utils.threads import bgThread
 from . import state
 from .components import Pool
 
-__all__ = ['Autoscaler', 'WorkerComponent']
+__all__ = ["Autoscaler", "WorkerComponent"]
 
 logger = get_logger(__name__)
 debug, info, error = logger.debug, logger.info, logger.error
 
-AUTOSCALE_KEEPALIVE = float(os.environ.get('AUTOSCALE_KEEPALIVE', 30))
+AUTOSCALE_KEEPALIVE = float(os.environ.get("AUTOSCALE_KEEPALIVE", 30))
 
 
 class WorkerComponent(bootsteps.StartStopStep):
-    label = 'Autoscaler'
+    label = "Autoscaler"
     conditional = True
-    requires = (Pool, )
+    requires = (Pool,)
 
     def __init__(self, w, **kwargs):
         self.enabled = w.autoscale
@@ -48,8 +48,11 @@ class WorkerComponent(bootsteps.StartStopStep):
     def create(self, w):
         scaler = w.autoscaler = self.instantiate(
             w.autoscaler_cls,
-            w.pool, w.max_concurrency, w.min_concurrency,
-            worker=w, mutex=DummyLock() if w.use_eventloop else None,
+            w.pool,
+            w.max_concurrency,
+            w.min_concurrency,
+            worker=w,
+            mutex=DummyLock() if w.use_eventloop else None,
         )
         return scaler if not w.use_eventloop else None
 
@@ -61,10 +64,15 @@ class WorkerComponent(bootsteps.StartStopStep):
 
 
 class Autoscaler(bgThread):
-
-    def __init__(self, pool, max_concurrency,
-                 min_concurrency=0, worker=None,
-                 keepalive=AUTOSCALE_KEEPALIVE, mutex=None):
+    def __init__(
+        self,
+        pool,
+        max_concurrency,
+        min_concurrency=0,
+        worker=None,
+        keepalive=AUTOSCALE_KEEPALIVE,
+        mutex=None,
+    ):
         super(Autoscaler, self).__init__()
         self.pool = pool
         self.mutex = mutex or threading.Lock()
@@ -74,7 +82,7 @@ class Autoscaler(bgThread):
         self._last_action = None
         self.worker = worker
 
-        assert self.keepalive, 'cannot scale down too fast.'
+        assert self.keepalive, "cannot scale down too fast."
 
     def body(self):
         with self.mutex:
@@ -127,31 +135,36 @@ class Autoscaler(bgThread):
         return self._grow(n)
 
     def scale_down(self, n):
-        if n and self._last_action and (
-                monotonic() - self._last_action > self.keepalive):
+        if (
+            n
+            and self._last_action
+            and (monotonic() - self._last_action > self.keepalive)
+        ):
             self._last_action = monotonic()
             return self._shrink(n)
 
     def _grow(self, n):
-        info('Scaling up %s processes.', n)
+        info("Scaling up %s processes.", n)
         self.pool.grow(n)
         self.worker.consumer._update_prefetch_count(n)
 
     def _shrink(self, n):
-        info('Scaling down %s processes.', n)
+        info("Scaling down %s processes.", n)
         try:
             self.pool.shrink(n)
         except ValueError:
             debug("Autoscaler won't scale down: all processes busy.")
         except Exception as exc:
-            error('Autoscaler: scale_down: %r', exc, exc_info=True)
+            error("Autoscaler: scale_down: %r", exc, exc_info=True)
         self.worker.consumer._update_prefetch_count(-n)
 
     def info(self):
-        return {'max': self.max_concurrency,
-                'min': self.min_concurrency,
-                'current': self.processes,
-                'qty': self.qty}
+        return {
+            "max": self.max_concurrency,
+            "min": self.min_concurrency,
+            "current": self.processes,
+            "qty": self.qty,
+        }
 
     @property
     def qty(self):

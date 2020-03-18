@@ -11,9 +11,9 @@ from __future__ import absolute_import
 import atexit
 import warnings
 
-from kombu.async import Hub as _Hub, get_event_loop, set_event_loop
-from kombu.async.semaphore import DummyLock, LaxBoundedSemaphore
-from kombu.async.timer import Timer as _Timer
+from kombu.asynchronous import Hub as _Hub, get_event_loop, set_event_loop
+from kombu.asynchronous.semaphore import DummyLock, LaxBoundedSemaphore
+from kombu.asynchronous.timer import Timer as _Timer
 
 from celery import bootsteps
 from celery._state import _set_task_join_will_block
@@ -21,7 +21,7 @@ from celery.exceptions import ImproperlyConfigured
 from celery.five import string_t
 from celery.utils.log import worker_logger as logger
 
-__all__ = ['Timer', 'Hub', 'Queues', 'Pool', 'Beat', 'StateDB', 'Consumer']
+__all__ = ["Timer", "Hub", "Queues", "Pool", "Beat", "StateDB", "Consumer"]
 
 ERR_B_GREEN = """\
 -B option doesn't work with eventlet/gevent pools: \
@@ -47,20 +47,22 @@ class Timer(bootsteps.Step):
                 # Default Timer is set by the pool, as e.g. eventlet
                 # needs a custom implementation.
                 w.timer_cls = w.pool_cls.Timer
-            w.timer = self.instantiate(w.timer_cls,
-                                       max_interval=w.timer_precision,
-                                       on_timer_error=self.on_timer_error,
-                                       on_timer_tick=self.on_timer_tick)
+            w.timer = self.instantiate(
+                w.timer_cls,
+                max_interval=w.timer_precision,
+                on_timer_error=self.on_timer_error,
+                on_timer_tick=self.on_timer_tick,
+            )
 
     def on_timer_error(self, exc):
-        logger.error('Timer error: %r', exc, exc_info=True)
+        logger.error("Timer error: %r", exc, exc_info=True)
 
     def on_timer_tick(self, delay):
-        logger.debug('Timer wake-up! Next eta %s secs.', delay)
+        logger.debug("Timer wake-up! Next eta %s secs.", delay)
 
 
 class Hub(bootsteps.StartStopStep):
-    requires = (Timer, )
+    requires = (Timer,)
 
     def __init__(self, w, **kwargs):
         w.hub = None
@@ -99,8 +101,9 @@ class Hub(bootsteps.StartStopStep):
 class Queues(bootsteps.Step):
     """This bootstep initializes the internal queues
     used by the worker."""
-    label = 'Queues (intra)'
-    requires = (Hub, )
+
+    label = "Queues (intra)"
+    requires = (Hub,)
 
     def create(self, w):
         w.process_task = w._process_task
@@ -123,12 +126,20 @@ class Pool(bootsteps.StartStopStep):
         * min_concurrency
 
     """
-    requires = (Queues, )
 
-    def __init__(self, w, autoscale=None, autoreload=None,
-                 no_execv=False, optimization=None, **kwargs):
+    requires = (Queues,)
+
+    def __init__(
+        self,
+        w,
+        autoscale=None,
+        autoreload=None,
+        no_execv=False,
+        optimization=None,
+        **kwargs
+    ):
         if isinstance(autoscale, string_t):
-            max_c, _, min_c = autoscale.partition(',')
+            max_c, _, min_c = autoscale.partition(",")
             autoscale = [int(max_c), min_c and int(min_c) or 0]
         w.autoscale = autoscale
         w.pool = None
@@ -149,7 +160,7 @@ class Pool(bootsteps.StartStopStep):
             w.pool.terminate()
 
     def create(self, w, semaphore=None, max_restarts=None):
-        if w.app.conf.CELERYD_POOL in ('eventlet', 'gevent'):
+        if w.app.conf.CELERYD_POOL in ("eventlet", "gevent"):
             warnings.warn(UserWarning(W_POOL_SETTING))
         threaded = not w.use_eventloop
         procs = w.min_concurrency
@@ -161,7 +172,8 @@ class Pool(bootsteps.StartStopStep):
             max_restarts = 100
         allow_restart = self.autoreload_enabled or w.pool_restarts
         pool = w.pool = self.instantiate(
-            w.pool_cls, w.min_concurrency,
+            w.pool_cls,
+            w.min_concurrency,
             initargs=(w.app, w.hostname),
             maxtasksperchild=w.max_tasks_per_child,
             timeout=w.task_time_limit,
@@ -179,7 +191,7 @@ class Pool(bootsteps.StartStopStep):
         return pool
 
     def info(self, w):
-        return {'pool': w.pool.info if w.pool else 'N/A'}
+        return {"pool": w.pool.info if w.pool else "N/A"}
 
     def register_with_event_loop(self, w, hub):
         w.pool.register_with_event_loop(hub)
@@ -192,7 +204,8 @@ class Beat(bootsteps.StartStopStep):
     argument is set.
 
     """
-    label = 'Beat'
+
+    label = "Beat"
     conditional = True
 
     def __init__(self, w, beat=False, **kwargs):
@@ -201,11 +214,12 @@ class Beat(bootsteps.StartStopStep):
 
     def create(self, w):
         from celery.beat import EmbeddedService
-        if w.pool_cls.__module__.endswith(('gevent', 'eventlet')):
+
+        if w.pool_cls.__module__.endswith(("gevent", "eventlet")):
             raise ImproperlyConfigured(ERR_B_GREEN)
-        b = w.beat = EmbeddedService(w.app,
-                                     schedule_filename=w.schedule_filename,
-                                     scheduler_cls=w.scheduler_cls)
+        b = w.beat = EmbeddedService(
+            w.app, schedule_filename=w.schedule_filename, scheduler_cls=w.scheduler_cls
+        )
         return b
 
 
@@ -230,7 +244,8 @@ class Consumer(bootsteps.StartStopStep):
         else:
             prefetch_count = w.concurrency * w.prefetch_multiplier
         c = w.consumer = self.instantiate(
-            w.consumer_cls, w.process_task,
+            w.consumer_cls,
+            w.process_task,
             hostname=w.hostname,
             send_events=w.send_events,
             init_callback=w.ready_callback,

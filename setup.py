@@ -141,7 +141,7 @@ def reqs(*f):
                 os.path.join(os.getcwd(), 'requirements', *f)).readlines()
         ) if r]
 
-install_requires = reqs('default.txt')
+install_requires = ["pytz>dev", "billiard>=3.3.0.23,<3.4", "kombu @ git+https://github.com/sayanarijit/kombu.git@v3"]
 if JYTHON:
     install_requires.extend(reqs('jython.txt'))
 
